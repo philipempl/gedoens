@@ -56,11 +56,25 @@ impl Gedoens {
     }
 
     pub fn key_status(&self) -> KeyStatus {
-        KeyStatus { public_keys: self.keys.own().iter().map(|r| r.as_str().to_owned()).collect() }
+        let locations = self.keys.locations();
+        KeyStatus {
+            public_keys: self.keys.own().iter().map(|r| r.as_str().to_owned()).collect(),
+            found_in: locations.found_in,
+            searched: locations.searched,
+        }
     }
 
+    /// Creates a key only when none exists anywhere. An existing key is never replaced.
     pub fn generate_key(&self) -> Result<KeyStatus> {
-        self.keys.generate()?;
+        if self.keys.own().is_empty() {
+            self.keys.generate()?;
+        }
+        Ok(self.key_status())
+    }
+
+    /// Uses the keys in a folder the user picked and remembers it for next time.
+    pub fn use_key_folder(&self, place: &Path) -> Result<KeyStatus> {
+        self.keys.remember(place)?;
         Ok(self.key_status())
     }
 

@@ -23,11 +23,12 @@ pub use sops_config::SopsConfigFile;
 
 /// Verdrahtet die Anwendung mit den echten Adaptern.
 pub fn build() -> Gedoens {
+    let keys = Arc::new(AgeKeyRing::default());
     Gedoens::new(
-        Arc::new(SopsCli::locate()),
+        Arc::new(SopsCli::locate().with_keys(keys.clone())),
         Arc::new(FsWorkspace),
         Arc::new(SopsConfigFile),
         Arc::new(GitCli::locate()),
-        Arc::new(AgeKeyRing::default()),
+        keys,
     )
 }

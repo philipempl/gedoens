@@ -2,9 +2,11 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use gedoens_application::views::{AccessView, Choice, FileView, KeyStatus, MergePreview, Overview, Step};
+use gedoens_application::views::{
+    AccessView, ChangesView, Choice, CompareView, FileView, KeyStatus, MergePreview, Overview, PublishInput, PublishedView, SharedView, Step,
+};
 use gedoens_application::Gedoens;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 
@@ -36,17 +38,17 @@ impl Session {
     fn root(&self) -> Reply<PathBuf> {
         self.root
             .lock()
-            .map_err(|_| "Interner Fehler.".to_owned())?
+            .map_err(|_| "Internal error.".to_owned())?
             .clone()
-            .ok_or_else(|| "Es ist kein Ordner geöffnet.".to_owned())
+            .ok_or_else(|| "No folder is open.".to_owned())
     }
 
     fn open(&self, folder: PathBuf) -> Reply<String> {
         if !folder.is_dir() {
-            return Err("Diesen Ordner gibt es nicht mehr.".to_owned());
+            return Err("This folder no longer exists.".to_owned());
         }
         let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        *self.root.lock().map_err(|_| "Interner Fehler.".to_owned())? = Some(folder);
+        *self.root.lock().map_err(|_| "Internal error.".to_owned())? = Some(folder);
         Ok(name)
     }
 }
@@ -70,6 +72,25 @@ fn copy(handle: &AppHandle, text: String, forget: bool) -> Reply<()> {
     Ok(())
 }
 
+/// The running version and whether a new one is on its way or ready.
+#[tauri::command]
+pub async fn update_status(handle: AppHandle) -> Reply<crate::updates::UpdateStatus> {
+    Ok(handle.state::<crate::updates::Updates>().status(&handle))
+}
+
+/// Looks for an update right now, e.g. when the user asks.
+#[tauri::command]
+pub async fn check_for_update(handle: AppHandle) -> Reply<crate::updates::UpdateStatus> {
+    crate::updates::check(&handle).await;
+    Ok(handle.state::<crate::updates::Updates>().status(&handle))
+}
+
+/// Installs the downloaded update and restarts into it.
+#[tauri::command]
+pub async fn restart_to_update(handle: AppHandle) -> Reply<()> {
+    crate::updates::install_and_restart(&handle)
+}
+
 #[tauri::command]
 pub async fn key_status(session: State<'_, Session>) -> Reply<KeyStatus> {
     Ok(session.app.key_status())
@@ -80,9 +101,20 @@ pub async fn generate_key(session: State<'_, Session>) -> Reply<KeyStatus> {
     say(session.app.generate_key())
 }
 
+/// Lets the user point at the folder with their key, when the search did not find it.
+/// Returns nothing when the dialog was cancelled.
+#[tauri::command]
+pub async fn pick_key_folder(handle: AppHandle, session: State<'_, Session>) -> Reply<Option<KeyStatus>> {
+    let picked = handle.dialog().file().set_title("Folder with your age key").blocking_pick_folder();
+    let Some(folder) = picked.and_then(|path| path.into_path().ok()) else {
+        return Ok(None);
+    };
+    say(session.app.use_key_folder(&folder)).map(Some)
+}
+
 #[tauri::command]
 pub async fn copy_public_key(handle: AppHandle, session: State<'_, Session>) -> Reply<()> {
-    let key = session.app.key_status().public_keys.into_iter().next().ok_or("Du hast noch keinen Key.")?;
+    let key = session.app.key_status().public_keys.into_iter().next().ok_or("You do not have a key yet.")?;
     copy(&handle, key, false)
 }
 
@@ -108,6 +140,46 @@ pub async fn current_folder(session: State<'_, Session>) -> Reply<Option<String>
 #[tauri::command]
 pub async fn overview(session: State<'_, Session>) -> Reply<Overview> {
     say(session.app.overview(&session.root()?))
+}
+
+/// Values that appear in more than one file. Places only, never values.
+#[tauri::command]
+pub async fn shared_values(session: State<'_, Session>) -> Reply<Vec<SharedView>> {
+    say(session.app.shared_values(&session.root()?))
+}
+
+/// The secrets of each folder side by side. Equal values are marked, never shown.
+#[tauri::command]
+pub async fn compare(session: State<'_, Session>) -> Reply<CompareView> {
+    say(session.app.compare(&session.root()?))
+}
+
+/// Secret files that differ from the last commit.
+#[tauri::command]
+pub async fn changes(session: State<'_, Session>) -> Reply<ChangesView> {
+    say(session.app.changes(&session.root()?))
+}
+
+/// Commit, push and merge request, for secret files only.
+#[tauri::command]
+pub async fn publish(session: State<'_, Session>, input: PublishInput) -> Reply<PublishedView> {
+    say(session.app.publish(&session.root()?, &input))
+}
+
+/// Opens a merge request in the browser. Only web addresses, nothing else.
+#[tauri::command]
+pub async fn open_url(url: String) -> Reply<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only web addresses can be opened.".to_owned());
+    }
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(windows) {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener).arg(&url).spawn().map(drop).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

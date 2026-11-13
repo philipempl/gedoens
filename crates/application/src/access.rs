@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use gedoens_domain::{AccessPolicy, Recipient};
+use gedoens_domain::{AccessPolicy, AreaLabel, Recipient};
 
 use crate::service::Snapshot;
 use crate::views::{AccessView, AreaView, PersonAccess};
@@ -30,15 +30,29 @@ impl Gedoens {
         let Some(policy) = &snapshot.policy else {
             return Ok(AccessView { has_policy: false, areas: Vec::new(), people: Vec::new() });
         };
+        let labels: Vec<AreaLabel> = policy.areas.iter().map(|area| area.label()).collect();
         let areas = policy
             .areas
             .iter()
-            .map(|area| AreaView {
-                index: area.index,
-                name: area.display_name(),
-                pattern: area.pattern.clone(),
-                files: snapshot.files_in(policy, area.index).len(),
-                editable: snapshot.editable(policy, area.index),
+            .zip(&labels)
+            .enumerate()
+            .map(|(position, (area, label))| {
+                // A catch-all rule after more specific ones only gets what they leave over.
+                let after_siblings = labels[..position].iter().any(|earlier| earlier.folder == label.folder);
+                let name = match (&label.file, after_siblings) {
+                    (Some(file), _) => file.clone(),
+                    (None, true) => "other files".to_owned(),
+                    (None, false) if label.folder.is_none() => "everything".to_owned(),
+                    (None, false) => "all files".to_owned(),
+                };
+                AreaView {
+                    index: area.index,
+                    folder: label.folder.clone(),
+                    name,
+                    pattern: area.pattern.clone(),
+                    files: snapshot.files_in(policy, area.index).len(),
+                    editable: snapshot.editable(policy, area.index),
+                }
             })
             .collect();
 
@@ -82,7 +96,7 @@ impl Gedoens {
         let recipient = Recipient::parse(recipient)?;
         let (path, snapshot) = self.editable_area(root, area)?;
         if snapshot.own.contains(&recipient) {
-            return Err(AppError::Unsupported("Dich selbst kannst du nicht austragen.".into()));
+            return Err(AppError::Unsupported("You cannot remove yourself.".into()));
         }
         self.policies.remove_recipient(&path, area, &recipient)?;
         let policy = self.policies.load(&path)?;
@@ -110,7 +124,7 @@ impl Gedoens {
         let policy = snapshot.policy.as_ref().ok_or(AppError::NoPolicy)?;
         if !snapshot.editable(policy, area) {
             return Err(AppError::Unsupported(
-                "Diesen Bereich kannst du nicht ändern. Dir fehlt dort der Zugriff, oder die Regel nutzt Key Groups.".into(),
+                "You cannot change this area. Either you have no access to it, or the rule uses key groups.".into(),
             ));
         }
         Ok((path, snapshot))

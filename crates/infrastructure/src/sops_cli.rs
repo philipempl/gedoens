@@ -1,24 +1,32 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gedoens_application::ports::{FileHandle, SecretStore};
 use gedoens_application::{AppError, Result};
 use gedoens_domain::{FileFormat, Node, Scalar, SecretPath};
 
-use crate::{json_tree, locate, process};
+use crate::{json_tree, locate, process, AgeKeyRing};
 
 /// Steuert das offizielle `sops`-Programm. gedoens baut SOPS nicht nach.
 pub struct SopsCli {
     program: Option<PathBuf>,
+    /// When set, every call gets these keys directly, wherever they live on disk.
+    keys: Option<Arc<AgeKeyRing>>,
 }
 
 impl SopsCli {
     pub fn locate() -> Self {
-        Self { program: locate::program("sops", "GEDOENS_SOPS") }
+        Self { program: locate::program("sops", "GEDOENS_SOPS"), keys: None }
+    }
+
+    pub fn with_keys(mut self, keys: Arc<AgeKeyRing>) -> Self {
+        self.keys = Some(keys);
+        self
     }
 
     pub fn at(program: PathBuf) -> Self {
-        Self { program: Some(program) }
+        Self { program: Some(program), keys: None }
     }
 
     fn run(&self, config: Option<&Path>, args: &[&str], file: Option<&Path>, tail: &[&str], stdin: Option<&str>) -> Result<String> {
@@ -36,7 +44,12 @@ impl SopsCli {
         }
         all.extend(tail.iter().map(OsString::from));
 
-        let output = process::run(program, all, stdin).map_err(|_| AppError::ToolMissing { tool: "sops" })?;
+        // SOPS also reads its usual places on top of this variable, so nothing gets lost.
+        let env: Vec<(&str, String)> = match self.keys.as_ref().map(|ring| ring.secret_keys()) {
+            Some(keys) if !keys.is_empty() => vec![("SOPS_AGE_KEY", keys.join("\n"))],
+            _ => Vec::new(),
+        };
+        let output = process::run(program, all, stdin, &env).map_err(|_| AppError::ToolMissing { tool: "sops" })?;
         if output.status.success() {
             return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }

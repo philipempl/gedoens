@@ -7,7 +7,7 @@ use std::process::{Command, Output, Stdio};
 ///
 /// Geheime Werte gehen immer über stdin, nie über die Befehlszeile, denn die
 /// kann jeder Prozess desselben Benutzers lesen.
-pub fn run<I, S>(program: &Path, args: I, stdin: Option<&str>) -> std::io::Result<Output>
+pub fn run<I, S>(program: &Path, args: I, stdin: Option<&str>, env: &[(&str, String)]) -> std::io::Result<Output>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -15,6 +15,7 @@ where
     let mut command = Command::new(program);
     command
         .args(args)
+        .envs(env.iter().map(|(name, value)| (*name, value.as_str())))
         .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

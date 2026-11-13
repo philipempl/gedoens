@@ -53,6 +53,10 @@ impl Person {
 #[serde(rename_all = "camelCase")]
 pub struct KeyStatus {
     pub public_keys: Vec<String>,
+    /// The files the keys were found in.
+    pub found_in: Vec<String>,
+    /// Every place that was searched, in order.
+    pub searched: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,6 +129,9 @@ pub struct FileView {
 #[serde(rename_all = "camelCase")]
 pub struct AreaView {
     pub index: usize,
+    /// The folder the rule is about, if the pattern names one. Areas are grouped by it.
+    pub folder: Option<String>,
+    /// The file within the folder, or a word for "all of it".
     pub name: String,
     pub pattern: Option<String>,
     pub files: usize,
@@ -172,4 +179,108 @@ pub struct Choice {
     pub path: Vec<Step>,
     /// Wahr: der fremde Wert gilt. Falsch: unserer.
     pub take_theirs: bool,
+}
+
+/// One place a shared value appears. The value itself never leaves the backend.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Place {
+    pub file: String,
+    pub path: Vec<Step>,
+}
+
+/// A value that appears in more than one file.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedView {
+    pub places: Vec<Place>,
+}
+
+/// One cell of the comparison: is the variable there, and does its value repeat?
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareCell {
+    pub present: bool,
+    /// Cells with the same number hold the same value. None: present and unique, or missing.
+    pub same: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareRowView {
+    pub path: Vec<Step>,
+    pub cells: Vec<CompareCell>,
+}
+
+/// The secrets of one folder: variables down, files across.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderComparison {
+    pub folder: String,
+    /// Relative paths of the files, one per column.
+    pub files: Vec<String>,
+    pub rows: Vec<CompareRowView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareView {
+    pub folders: Vec<FolderComparison>,
+    /// Files left out because this user cannot read them right now.
+    pub skipped: Vec<String>,
+}
+
+/// One changed value, by path only.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyChange {
+    pub path: Vec<Step>,
+    /// "added", "changed" or "removed".
+    pub kind: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangedFile {
+    pub path: String,
+    /// "added", "modified" or "deleted".
+    pub status: &'static str,
+    /// The values that differ from the last commit. Empty with `reencrypted` when only
+    /// recipients or the data key changed.
+    pub keys: Vec<KeyChange>,
+    pub reencrypted: bool,
+    /// False when this user cannot read the file, so the values could not be compared.
+    pub readable: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangesView {
+    pub is_repository: bool,
+    pub branch: Option<String>,
+    pub target: Option<String>,
+    /// Commits on this branch that the target does not have. They would end up in the merge request too.
+    pub ahead: usize,
+    pub files: Vec<ChangedFile>,
+    /// Changed files that are not secrets. gedoens leaves them alone.
+    pub others: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishInput {
+    pub files: Vec<String>,
+    pub branch: String,
+    pub new_branch: bool,
+    pub message: String,
+    pub merge_request: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedView {
+    pub branch: String,
+    pub commit: String,
+    pub merge_request_url: Option<String>,
+    pub note: Option<String>,
 }
