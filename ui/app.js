@@ -99,6 +99,14 @@ async function loadChanges() {
   } catch (e) { /* not a repository or no folder */ }
 }
 
+/** "preview.yaml, DB_PASS_LEGACY": other files by name, places in this file by variable. */
+function sameAsLabel(file, others) {
+  const elsewhere = [...new Set(others.filter((p) => p.file !== file).map((p) => p.file))];
+  const names = shortNames([file, ...elsewhere]).slice(1);
+  const here = others.filter((p) => p.file === file).map((p) => String(p.path[p.path.length - 1]));
+  return [...names, ...here].join(', ');
+}
+
 function sharedAt(file, path) {
   const here = dotted(path);
   const hit = state.shared.find((s) => s.places.some((p) => p.file === file && dotted(p.path) === here));
@@ -449,7 +457,7 @@ function rowOf(entry, i) {
   const leaf = typeof last === 'number' ? `[${last}]` : String(last);
   const changed = open && dirty();
   const others = sharedAt(state.file.path, entry.path);
-  const warning = others ? `<span class="warnb" title="${esc(`Same value as ${others.map((p) => `${dotted(p.path)} in ${p.file}`).join(', ')}`)}">${icon('warn')}same as ${esc((() => { const fs = [state.file.path, ...new Set(others.map((p) => p.file))]; return shortNames(fs).slice(1).filter((n, i, all) => all.indexOf(n) === i).join(', '); })())}</span>` : '';
+  const warning = others ? `<span class="warnb" title="${esc(`Same value as ${others.map((p) => `${dotted(p.path)} in ${p.file}`).join(', ')}`)}">${icon('warn')}same as ${esc(sameAsLabel(state.file.path, others))}</span>` : '';
   const value = open
     ? `<input class="cellin" id="cellEdit" value="${esc(state.draft)}" autocomplete="off" spellcheck="false" aria-label="Value of ${esc(dotted(entry.path))}">`
     : `<button class="mask" data-act="reveal" data-i="${i}" aria-label="Show ${esc(dotted(entry.path))}">••••••••</button>`;
@@ -460,7 +468,7 @@ function rowOf(entry, i) {
        <button class="icon sm" data-act="hide" title="Hide (Esc)" aria-label="Hide">${icon('x')}</button>`
     : `<button class="icon sm ghost" data-act="reveal" data-i="${i}" title="Show" aria-label="Show">${icon('eye')}</button>`;
   return `<tr class="trow ${open ? 'open' : ''} ${changed ? 'dirty' : ''}" data-row="${i}">
-    <td class="tk" title="${esc(dotted(entry.path))}"><span class="kn">${prefix ? `<span class="pre">${esc(prefix)}</span>` : ''}${esc(leaf)}</span>${warning}</td>
+    <td class="tk" title="${esc(dotted(entry.path))}"><div class="kw"><span class="kn">${prefix ? `<span class="pre">${esc(prefix)}</span>` : ''}${esc(leaf)}</span>${warning}</div></td>
     <td class="tv">${value}</td><td class="ta">${tools}</td></tr>`;
 }
 

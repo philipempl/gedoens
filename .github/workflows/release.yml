@@ -44,3 +44,11 @@ jobs:
           # latest.json tells running apps that this release exists. It counts once the draft is published.
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  download-names:
+    needs: build
+    permissions:
+      contents: write
+    uses: ./.github/workflows/download-names.yml
+    with:
+      tag: ${{ github.ref_name }}
