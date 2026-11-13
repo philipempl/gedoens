@@ -1,0 +1,11 @@
+[package]
+name = "gedoens-application"
+description = "Anwendungsfälle von gedoens und die Schnittstellen nach außen."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gedoens-domain.workspace = true
+serde.workspace = true
+thiserror.workspace = true

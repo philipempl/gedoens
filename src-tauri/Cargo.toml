@@ -1,0 +1,17 @@
+[package]
+name = "gedoens"
+description = "Ein kleiner Secrets-Manager für Teams, die SOPS nutzen."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+gedoens-application.workspace = true
+gedoens-infrastructure.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-clipboard-manager = "2"

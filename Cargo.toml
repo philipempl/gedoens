@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = ["crates/domain", "crates/application", "crates/infrastructure", "src-tauri"]
+# `cargo test` im Wurzelordner prüft Kern und Adapter, ohne die Tauri-Schale zu bauen.
+default-members = ["crates/domain", "crates/application", "crates/infrastructure"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+
+[workspace.dependencies]
+gedoens-domain = { path = "crates/domain" }
+gedoens-application = { path = "crates/application" }
+gedoens-infrastructure = { path = "crates/infrastructure" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+regex = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

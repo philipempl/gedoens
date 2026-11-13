@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Die Oberfläche darf nur die Befehle der App aufrufen. Dialog und Zwischenablage bedient ausschließlich das Backend.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
