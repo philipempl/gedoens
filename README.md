@@ -19,9 +19,24 @@ Part of the same family of small tools as kuebel.
   `.sops.yaml` (`- age1…  # Anna`).
 - **Drift**: a file whose recipients differ from its rule shows up as an open item
   with one button to fix it.
+- **Compare**: secrets with capital names (`DB_PASSWORD`) side by side per folder,
+  variables down and files across. Equal values share a letter, so a password used
+  for both preview and production stands out. Values are compared, never shown.
+- **Changes**: the secret files that differ from the last commit, down to which
+  values changed. Commit them on a new branch, push, and open a GitLab merge request
+  in one step (via push options, no token needed). Other files are never touched.
 - **Merging**: after a pull, two edits to the same file always collide in the
   `sops` block. gedoens compares the three versions value by value in plaintext,
   merges what does not overlap and asks only where both sides changed the same value.
+
+## Updates
+
+The app checks the GitHub releases at start and every six hours. A new version is
+downloaded in the background; a note at the bottom of the sidebar then offers a
+restart that installs it. Updates are signed: the app installs only bundles signed
+with the project's key, whose public half is in `src-tauri/tauri.conf.json`. The
+private half lives in the repository secret `TAURI_SIGNING_PRIVATE_KEY`. A release
+reaches running apps once its draft is published.
 
 ## Compatibility
 
@@ -39,7 +54,11 @@ Whoever does not use gedoens notices nothing.
 - `sops` 3.10 or newer and `git` on your machine. gedoens looks next to the app,
   in `PATH` and in the usual places (Homebrew, `/usr/local/bin`, Nix). Override
   with `GEDOENS_SOPS` and `GEDOENS_GIT`.
-- An age key. If you have none, gedoens creates one on first start.
+- An age key. gedoens looks in `$SOPS_AGE_KEY`, `$SOPS_AGE_KEY_FILE`,
+  `$XDG_CONFIG_HOME/sops/age/keys.txt`, the SOPS default for your system and
+  `~/.config/sops/age/keys.txt`. If your key lives elsewhere, pick its folder once
+  and gedoens remembers it (outside the repository). Only if there is no key at all
+  does it offer to create one, and it backs up an existing `keys.txt` before writing.
 
 ## Architecture
 

@@ -8,7 +8,9 @@ mod access;
 mod error;
 mod files;
 mod merging;
+mod publishing;
 pub mod ports;
+mod reuse;
 mod service;
 pub mod views;
 

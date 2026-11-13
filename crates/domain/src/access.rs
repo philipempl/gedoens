@@ -25,23 +25,49 @@ impl Area {
         }
     }
 
-    /// Kurzer Name für Menschen, abgeleitet aus dem Pfadmuster:
-    /// aus `secrets/prod/.*\.yaml$` wird `prod`. Gespeichert wird er nirgends.
-    pub fn display_name(&self) -> String {
+    /// Short labels for people, derived from the path pattern. Nothing is stored.
+    ///
+    /// `environments/prod/api\.yaml$` gives folder `prod` and file `api`,
+    /// `environments/prod/.*\.yaml$` gives folder `prod` and no single file.
+    pub fn label(&self) -> AreaLabel {
         let Some(pattern) = &self.pattern else {
-            return "alles".to_owned();
+            return AreaLabel { folder: None, file: None };
         };
         let plain = pattern.trim_start_matches('^').trim_end_matches('$').replace("\\.", ".");
-        for part in plain.split('/').rev() {
+        let segments: Vec<&str> = plain.split('/').collect();
+        let word = |part: &str| -> Option<String> {
             let stem = part.split('.').next().unwrap_or("");
             let is_word = !stem.is_empty() && stem.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-');
             let is_plain_part = part.chars().all(|c| c.is_alphanumeric() || "._-".contains(c));
-            if is_word && is_plain_part {
-                return stem.to_owned();
-            }
+            (is_word && is_plain_part).then(|| stem.to_owned())
+        };
+        let (last, before) = segments.split_last().expect("split never yields nothing");
+        let folder = || before.iter().rev().find_map(|part| word(part));
+        match word(last) {
+            Some(file) if before.is_empty() => AreaLabel { folder: None, file: Some(file) },
+            Some(file) => AreaLabel { folder: folder(), file: Some(file) },
+            None => match folder() {
+                Some(folder) => AreaLabel { folder: Some(folder), file: None },
+                None => AreaLabel { folder: None, file: Some(pattern.clone()) },
+            },
         }
-        pattern.clone()
     }
+
+    /// One line for people: `prod/api`, `prod` or `everything`.
+    pub fn display_name(&self) -> String {
+        match self.label() {
+            AreaLabel { folder: Some(folder), file: Some(file) } => format!("{folder}/{file}"),
+            AreaLabel { folder: Some(only), file: None } | AreaLabel { folder: None, file: Some(only) } => only,
+            AreaLabel { folder: None, file: None } => "everything".to_owned(),
+        }
+    }
+}
+
+/// What an area covers, in words: a folder, a single file in it, or both.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AreaLabel {
+    pub folder: Option<String>,
+    pub file: Option<String>,
 }
 
 /// Die ganze `.sops.yaml` aus fachlicher Sicht: Bereiche und die Namen der Keys.
@@ -98,8 +124,17 @@ mod tests {
     fn derives_a_readable_name_from_the_pattern() {
         assert_eq!(area(0, Some(r"secrets/prod/.*\.yaml$")).display_name(), "prod");
         assert_eq!(area(0, Some(r"secrets/dev/.*")).display_name(), "dev");
-        assert_eq!(area(0, Some(r"secrets/prod/payments\.yaml$")).display_name(), "payments");
+        assert_eq!(area(0, Some(r"secrets/prod/payments\.yaml$")).display_name(), "prod/payments");
+        assert_eq!(area(0, Some(r"payments\.yaml$")).display_name(), "payments");
         assert_eq!(area(0, Some(r"\.prod\.yaml$")).display_name(), r"\.prod\.yaml$");
-        assert_eq!(area(0, None).display_name(), "alles");
+        assert_eq!(area(0, None).display_name(), "everything");
+    }
+
+    #[test]
+    fn same_file_names_in_different_folders_stay_apart() {
+        let a = area(0, Some(r"environments/acme/production\.yaml$")).label();
+        let b = area(1, Some(r"environments/globex/production\.yaml$")).label();
+        assert_eq!(a, AreaLabel { folder: Some("acme".into()), file: Some("production".into()) });
+        assert_ne!(a, b);
     }
 }

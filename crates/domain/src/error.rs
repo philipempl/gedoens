@@ -2,12 +2,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum DomainError {
-    #[error("Das ist kein gültiger Public Key. Er muss mit age1 beginnen.")]
+    #[error("That is not a valid public key. It has to start with age1.")]
     InvalidRecipient,
-    #[error("Der Name „{0}“ enthält Zeichen, die SOPS in Namen nicht versteht.")]
+    #[error("The name “{0}” contains characters SOPS does not understand in names.")]
     UnsupportedKey(String),
-    #[error("Für „{0}“ fehlt die Entscheidung, welcher Wert gilt.")]
+    #[error("No decision yet on which value applies to “{0}”.")]
     MissingChoice(String),
-    #[error("Ein Bereich braucht mindestens einen Empfänger.")]
+    #[error("An area needs at least one recipient.")]
     EmptyArea,
 }

@@ -33,9 +33,14 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update bundles; the app only installs what this key signed.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: cargo tauri
           tagName: ${{ github.ref_name }}
           releaseName: gedoens ${{ github.ref_name }}
           releaseDraft: true
+          # latest.json tells running apps that this release exists. It counts once the draft is published.
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

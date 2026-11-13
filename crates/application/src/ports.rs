@@ -53,16 +53,74 @@ pub trait PolicyRepository: Send + Sync {
     fn rename(&self, path: &Path, recipient: &Recipient, name: &str) -> Result<()>;
 }
 
-/// Git, soweit die App es braucht: Konflikte erkennen und als gelöst markieren.
+/// A change to a file as Git sees it, relative to the opened folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileChange {
+    Added,
+    Modified,
+    Deleted,
+}
+
+/// What to publish: these files, in one commit, pushed, optionally with a merge request.
+#[derive(Debug, Clone)]
+pub struct PublishRequest {
+    /// The branch to commit on. A new one is created from the current state.
+    pub branch: String,
+    pub new_branch: bool,
+    /// Relative to the opened folder. Only these paths go into the commit.
+    pub paths: Vec<String>,
+    pub message: String,
+    pub merge_request: Option<MergeRequest>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MergeRequest {
+    pub target: String,
+    pub title: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Published {
+    pub branch: String,
+    pub commit: String,
+    pub merge_request_url: Option<String>,
+    /// Said to the user when something worked only in part, e.g. no merge request.
+    pub note: Option<String>,
+}
+
+/// Git, as far as the app needs it.
 pub trait VersionControl: Send + Sync {
     fn conflicted(&self, root: &Path) -> Vec<String>;
     /// Ein Stand der Datei im Konflikt: 1 gemeinsamer Ursprung, 2 unserer, 3 der fremde.
     fn stage(&self, root: &Path, relative: &str, number: u8) -> Option<String>;
     fn mark_resolved(&self, root: &Path, relative: &str) -> Result<()>;
+    /// Everything that differs from the last commit, untracked files included.
+    fn changes(&self, root: &Path) -> Vec<(String, FileChange)>;
+    /// The file as it was in the last commit.
+    fn committed(&self, root: &Path, relative: &str) -> Option<String>;
+    fn branch(&self, root: &Path) -> Option<String>;
+    /// The branch merge requests go into, usually `main`.
+    fn target_branch(&self, root: &Path) -> Option<String>;
+    /// Commits on the current branch that the target branch does not have yet.
+    fn ahead_of(&self, root: &Path, target: &str) -> usize;
+    fn publish(&self, root: &Path, request: &PublishRequest) -> Result<Published>;
 }
 
-/// Die eigenen Keys, am selben Ort, an dem auch SOPS sie sucht.
+/// Where the own keys were looked for and where they turned up.
+#[derive(Debug, Clone, Default)]
+pub struct KeyLocations {
+    pub searched: Vec<String>,
+    pub found_in: Vec<String>,
+}
+
+/// The own keys, in the places SOPS looks for them.
 pub trait KeyRing: Send + Sync {
     fn own(&self) -> Vec<Recipient>;
+    fn locations(&self) -> KeyLocations;
+    /// Creates a key, but only if there is none yet. Never overwrites anything.
     fn generate(&self) -> Result<Recipient>;
+    /// Remembers a folder (or file) with keys that the usual search does not find.
+    /// Returns the key file that was found there.
+    fn remember(&self, place: &Path) -> Result<PathBuf>;
 }

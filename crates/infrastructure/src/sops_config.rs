@@ -181,7 +181,7 @@ fn names_in(text: &str) -> BTreeMap<Recipient, String> {
 
 fn parse(text: &str) -> Result<AccessPolicy> {
     let raw: RawConfig = serde_yaml_ng::from_str(text)
-        .map_err(|e| AppError::Unsupported(format!("Die .sops.yaml ist kein gültiges YAML: {e}")))?;
+        .map_err(|e| AppError::Unsupported(format!("The .sops.yaml is not valid YAML: {e}")))?;
     let rules = raw.creation_rules.unwrap_or_default();
     let lines: Vec<&str> = text.lines().collect();
     let spans = rule_spans(&lines);
@@ -214,14 +214,14 @@ fn tidy_name(name: &str) -> Result<String> {
     let tidy: String = name.chars().map(|c| if c.is_control() || c == '#' { ' ' } else { c }).collect();
     let tidy = tidy.split_whitespace().collect::<Vec<_>>().join(" ");
     if tidy.is_empty() {
-        Err(AppError::Unsupported("Gib einen Namen ein.".into()))
+        Err(AppError::Unsupported("Enter a name.".into()))
     } else {
         Ok(tidy)
     }
 }
 
 fn locked() -> AppError {
-    AppError::Unsupported("Diese Regel nutzt Key Groups oder YAML-Verweise. Ändere sie bitte von Hand in der .sops.yaml.".into())
+    AppError::Unsupported("This rule uses key groups or YAML aliases. Please change it by hand in the .sops.yaml.".into())
 }
 
 impl SopsConfigFile {

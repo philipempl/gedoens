@@ -6,19 +6,19 @@ pub type Result<T> = std::result::Result<T, AppError>;
 /// Jeder Fehler sagt in einem Satz, was los ist und was zu tun ist.
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Dein Key steht nicht in dieser Datei. Bitte jemanden mit Zugriff, dich einzutragen.")]
+    #[error("Your key is not in this file. Ask someone with access to add you.")]
     NoAccess,
-    #[error("In diesem Ordner gibt es keine .sops.yaml. Zugriff lässt sich erst mit ihr verwalten.")]
+    #[error("This folder has no .sops.yaml. Access can only be managed once it has one.")]
     NoPolicy,
-    #[error("{0} wurde nicht gefunden.")]
+    #[error("{0} was not found.")]
     NotFound(String),
     #[error("{0}")]
     Unsupported(String),
-    #[error("{tool} meldet: {message}")]
+    #[error("{tool} says: {message}")]
     Tool { tool: &'static str, message: String },
-    #[error("{tool} ist nicht installiert oder wurde nicht gefunden.")]
+    #[error("{tool} is not installed or could not be found.")]
     ToolMissing { tool: &'static str },
-    #[error("Die Datei ließ sich nicht lesen oder schreiben: {0}")]
+    #[error("The file could not be read or written: {0}")]
     Io(String),
     #[error(transparent)]
     Domain(#[from] DomainError),
