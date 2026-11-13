@@ -179,6 +179,86 @@ fn names_in(text: &str) -> BTreeMap<Recipient, String> {
     names
 }
 
+/// Splits `a (x, y), b, c` at the commas that are not inside brackets.
+fn split_top_level(text: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut current = String::new();
+    for c in text.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(std::mem::take(&mut current));
+                continue;
+            }
+            _ => {}
+        }
+        current.push(c);
+    }
+    parts.push(current);
+    parts
+}
+
+/// `complioty-production (ArgoCD — same cluster)` becomes `complioty-production`.
+fn without_brackets(text: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0i32;
+    for c in text.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Names that a comment right above a rule's `age:` lists in the order of its keys:
+///
+/// ```yaml
+///     # argocd-production, philip, anna
+///     age: >-
+///       age1…, age1…, age1…
+/// ```
+///
+/// Taken only when the comment names exactly as many owners as the rule has keys.
+/// Where rules disagree about a key, the name most of them use wins.
+fn hinted_names(lines: &[&str], spans: &[RuleSpan], areas: &[Area]) -> BTreeMap<Recipient, String> {
+    let mut votes: BTreeMap<Recipient, Vec<String>> = BTreeMap::new();
+    for (span, area) in spans.iter().zip(areas) {
+        let Some(block) = age_block(lines, *span) else { continue };
+        let mut comment: Vec<&str> = Vec::new();
+        let mut i = block.start;
+        while i > span.start {
+            i -= 1;
+            let line = lines[i].trim();
+            if !line.starts_with('#') {
+                break;
+            }
+            comment.insert(0, line.trim_start_matches('#').trim());
+        }
+        if comment.is_empty() {
+            continue;
+        }
+        let names: Vec<String> = split_top_level(&comment.join(" ")).iter().map(|part| without_brackets(part)).collect();
+        if names.len() != area.recipients.len() || names.iter().any(|n| n.is_empty() || n.chars().count() > 40) {
+            continue;
+        }
+        for (recipient, name) in area.recipients.iter().zip(names) {
+            votes.entry(recipient.clone()).or_default().push(name);
+        }
+    }
+    votes
+        .into_iter()
+        .filter_map(|(recipient, names)| {
+            let best = names.iter().max_by_key(|candidate| names.iter().filter(|n| n == candidate).count())?.clone();
+            Some((recipient, best))
+        })
+        .collect()
+}
+
 fn parse(text: &str) -> Result<AccessPolicy> {
     let raw: RawConfig = serde_yaml_ng::from_str(text)
         .map_err(|e| AppError::Unsupported(format!("The .sops.yaml is not valid YAML: {e}")))?;
@@ -206,8 +286,9 @@ fn parse(text: &str) -> Result<AccessPolicy> {
                 editable: rule.age.is_some() && groups.is_empty() && plain_block,
             }
         })
-        .collect();
-    Ok(AccessPolicy { areas, names: names_in(text) })
+        .collect::<Vec<Area>>();
+    let hints = if layout_known { hinted_names(&lines, &spans, &areas) } else { BTreeMap::new() };
+    Ok(AccessPolicy { areas, names: names_in(text), hints })
 }
 
 fn tidy_name(name: &str) -> Result<String> {
@@ -298,7 +379,7 @@ impl PolicyRepository for SopsConfigFile {
             let areas = editable_areas_with(policy, recipient);
             if areas.is_empty() {
                 return Err(AppError::Unsupported(
-                    "Dieser Key steht in keinem Bereich der .sops.yaml. Einen Namen kann er erst dort bekommen.".into(),
+                    "This key is in no rule of the .sops.yaml, so there is nowhere to write its name.".into(),
                 ));
             }
             Ok(areas)
@@ -375,6 +456,28 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert_eq!(text.matches(&format!("- {B}  # CI Runner")).count(), 3);
         assert!(SopsConfigFile.rename(&path, &key(C), "Niemand").is_err());
+    }
+
+    #[test]
+    fn names_listed_above_a_rule_become_suggestions() {
+        let text = format!(
+            "creation_rules:\n  - path_regex: prod/.*\n    # argocd-production (ArgoCD, prod), philip, anna\n    age: >-\n      {A},\n      {B},\n      {C}\n  - path_regex: dev/.*\n    # philip, anna\n    age: {B},{C}\n  - path_regex: odd/.*\n    # only one name for two keys\n    age: {A},{B}\n"
+        );
+        let policy = parse(&text).unwrap();
+        assert_eq!(policy.hint_for(&key(A)), Some("argocd-production"));
+        assert_eq!(policy.hint_for(&key(B)), Some("philip"));
+        assert_eq!(policy.hint_for(&key(C)), Some("anna"));
+        assert_eq!(policy.name_of(&key(B)), None, "a hint is not a name");
+
+        // Taking a suggestion writes it as a real name and keeps the comment line.
+        let (_keep, path) = file_with(&text);
+        SopsConfigFile.rename(&path, &key(B), "philip").unwrap();
+        let written = fs::read_to_string(&path).unwrap();
+        assert!(written.contains("# argocd-production (ArgoCD, prod), philip, anna"));
+        let again = parse(&written).unwrap();
+        assert_eq!(again.name_of(&key(B)), Some("philip"));
+        assert_eq!(again.hint_for(&key(B)), None);
+        assert_eq!(again.hint_for(&key(C)), Some("anna"));
     }
 
     #[test]

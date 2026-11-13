@@ -99,6 +99,14 @@ async function loadChanges() {
   } catch (e) { /* not a repository or no folder */ }
 }
 
+/** "preview.yaml, DB_PASS_LEGACY": other files by name, places in this file by variable. */
+function sameAsLabel(file, others) {
+  const elsewhere = [...new Set(others.filter((p) => p.file !== file).map((p) => p.file))];
+  const names = shortNames([file, ...elsewhere]).slice(1);
+  const here = others.filter((p) => p.file === file).map((p) => String(p.path[p.path.length - 1]));
+  return [...names, ...here].join(', ');
+}
+
 function sharedAt(file, path) {
   const here = dotted(path);
   const hit = state.shared.find((s) => s.places.some((p) => p.file === file && dotted(p.path) === here));
@@ -272,11 +280,15 @@ function namingList(o) {
     const areas = a.areas.filter((_, i) => row.areas[i]).map(areaName);
     return areas.length ? `reads ${areas.join(', ')}` : 'in no rule, only in files';
   };
-  return `<section class="block"><div class="bh"><h2>Name your keys</h2><span class="fine">${plural(people.length, 'key has', 'keys have')} no name yet</span></div>
+  const hinted = people.filter((p) => p.suggestion);
+  return `<section class="block"><div class="bh"><h2>Name your keys</h2><span class="fine">${plural(people.length, 'key has', 'keys have')} no name yet</span>
+      ${hinted.length > 1 ? `<span class="sp"></span><button class="btn sm pri" data-act="nameAll">${icon('check')}Use ${hinted.length} suggestions</button>` : ''}</div>
+    ${hinted.length ? '<p class="fine hintsrc">Suggestions come from the comments above each rule in .sops.yaml. Saving writes the name next to the key.</p>' : ''}
     <div class="list namel">${people.map((person) => `<div class="item nrow">
       <span class="ava un">?</span>
       <span class="nk"><span class="key">${esc(person.short)}</span><span class="fine">${esc(reach(person))}</span></span>
-      <input class="field" data-name-for="${esc(person.recipient)}" placeholder="Who is this?" autocomplete="off" spellcheck="false">
+      ${person.suggestion ? `<button class="sugg" data-act="nameAs" data-recipient="${esc(person.recipient)}" data-name="${esc(person.suggestion)}" title="Use this name">${icon('check')}${esc(person.suggestion)}</button>` : ''}
+      <input class="field" data-name-for="${esc(person.recipient)}" placeholder="${person.suggestion ? 'Or another name' : 'Who is this?'}" autocomplete="off" spellcheck="false">
       <button class="btn" data-act="name" data-recipient="${esc(person.recipient)}">Save</button></div>`).join('')}</div></section>`;
 }
 
@@ -449,7 +461,7 @@ function rowOf(entry, i) {
   const leaf = typeof last === 'number' ? `[${last}]` : String(last);
   const changed = open && dirty();
   const others = sharedAt(state.file.path, entry.path);
-  const warning = others ? `<span class="warnb" title="${esc(`Same value as ${others.map((p) => `${dotted(p.path)} in ${p.file}`).join(', ')}`)}">${icon('warn')}same as ${esc((() => { const fs = [state.file.path, ...new Set(others.map((p) => p.file))]; return shortNames(fs).slice(1).filter((n, i, all) => all.indexOf(n) === i).join(', '); })())}</span>` : '';
+  const warning = others ? `<span class="warnb" title="${esc(`Same value as ${others.map((p) => `${dotted(p.path)} in ${p.file}`).join(', ')}`)}">${icon('warn')}same as ${esc(sameAsLabel(state.file.path, others))}</span>` : '';
   const value = open
     ? `<input class="cellin" id="cellEdit" value="${esc(state.draft)}" autocomplete="off" spellcheck="false" aria-label="Value of ${esc(dotted(entry.path))}">`
     : `<button class="mask" data-act="reveal" data-i="${i}" aria-label="Show ${esc(dotted(entry.path))}">••••••••</button>`;
@@ -460,7 +472,7 @@ function rowOf(entry, i) {
        <button class="icon sm" data-act="hide" title="Hide (Esc)" aria-label="Hide">${icon('x')}</button>`
     : `<button class="icon sm ghost" data-act="reveal" data-i="${i}" title="Show" aria-label="Show">${icon('eye')}</button>`;
   return `<tr class="trow ${open ? 'open' : ''} ${changed ? 'dirty' : ''}" data-row="${i}">
-    <td class="tk" title="${esc(dotted(entry.path))}"><span class="kn">${prefix ? `<span class="pre">${esc(prefix)}</span>` : ''}${esc(leaf)}</span>${warning}</td>
+    <td class="tk" title="${esc(dotted(entry.path))}"><div class="kw"><span class="kn">${prefix ? `<span class="pre">${esc(prefix)}</span>` : ''}${esc(leaf)}</span>${warning}</div></td>
     <td class="tv">${value}</td><td class="ta">${tools}</td></tr>`;
 }
 
@@ -639,7 +651,7 @@ function layer() {
     const canRemove = !person.me && state.access.areas.some((area, i) => area.editable && person.areas[i]);
     const title = person.me ? 'Your key' : person.name || 'Unnamed key';
     const naming = person.me ? '' : `<label class="l" for="personName">Name</label>
-      <div class="namer"><input class="field" id="personName" data-name-for="${esc(person.recipient)}" value="${esc(person.name || '')}" placeholder="Who does it belong to?" autocomplete="off">
+      <div class="namer"><input class="field" id="personName" data-name-for="${esc(person.recipient)}" value="${esc(person.name || person.suggestion || '')}" placeholder="Who does it belong to?" autocomplete="off">
       <button class="btn pri" data-act="name" data-recipient="${esc(person.recipient)}">Save</button></div>`;
     return `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-label="${esc(title)}"><h3>${esc(title)}</h3>
       <div class="fullkey">${esc(person.recipient)}</div>${naming}
@@ -858,6 +870,17 @@ const actions = {
   },
   async ask() { await call('copy_public_key'); toast('Your public key is copied. Send it to someone with access.'); },
   async myKey() { await call('copy_public_key'); toast('Your public key is copied'); },
+  async nameAs(el) {
+    await call('name_key', { recipient: el.dataset.recipient, name: el.dataset.name });
+    await refresh();
+    toast(`The key is now called ${el.dataset.name}`);
+  },
+  async nameAll() {
+    const people = state.overview.issues.filter((x) => x.kind === 'unnamed' && x.person.suggestion).map((x) => x.person);
+    for (const p of people) await call('name_key', { recipient: p.recipient, name: p.suggestion });
+    await refresh();
+    toast(`${plural(people.length, 'key', 'keys')} named`);
+  },
   async name(el) {
     const input = document.querySelector(`[data-name-for="${CSS.escape(el.dataset.recipient)}"]`);
     const name = input.value.trim();

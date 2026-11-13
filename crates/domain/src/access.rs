@@ -75,6 +75,9 @@ pub struct AreaLabel {
 pub struct AccessPolicy {
     pub areas: Vec<Area>,
     pub names: BTreeMap<Recipient, String>,
+    /// Names the file hints at without stating them per key, for example a comment
+    /// above a rule that lists its owners in the order of the keys. Offered, never assumed.
+    pub hints: BTreeMap<Recipient, String>,
 }
 
 impl AccessPolicy {
@@ -84,6 +87,14 @@ impl AccessPolicy {
 
     pub fn name_of(&self, recipient: &Recipient) -> Option<&str> {
         self.names.get(recipient).map(String::as_str)
+    }
+
+    /// A likely name for a key that has none yet.
+    pub fn hint_for(&self, recipient: &Recipient) -> Option<&str> {
+        if self.names.contains_key(recipient) {
+            return None;
+        }
+        self.hints.get(recipient).map(String::as_str)
     }
 
     pub fn recipients(&self) -> Vec<Recipient> {
@@ -114,6 +125,7 @@ mod tests {
                 area(2, None),
             ],
             names: BTreeMap::new(),
+            hints: BTreeMap::new(),
         };
         assert_eq!(policy.area_for("secrets/prod/payments.yaml").unwrap().index, 0);
         assert_eq!(policy.area_for("secrets/prod/api.yaml").unwrap().index, 1);

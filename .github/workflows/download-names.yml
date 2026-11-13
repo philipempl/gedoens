@@ -1,0 +1,44 @@
+name: download-names
+# Adds copies of the installers under names without a version, so that
+# https://github.com/philipempl/gedoens/releases/latest/download/gedoens-macos.dmg
+# and friends always point to the newest release. The README links to these.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v0.2.0
+        type: string
+        required: true
+
+jobs:
+  copies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Upload installers under stable names
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir in out
+          gh release download "$TAG" -R "$REPO" -D in \
+            -p '*.dmg' -p '*-setup.exe' -p '*.msi' -p '*.AppImage' -p '*.deb' -p '*.rpm'
+          copy() { # copy <glob> <stable name>
+            set -- in/$1 "$2"
+            if [ -f "$1" ]; then cp "$1" "out/$2"; else echo "no file for $2"; fi
+          }
+          copy '*.dmg'        gedoens-macos.dmg
+          copy '*-setup.exe'  gedoens-windows-setup.exe
+          copy '*.msi'        gedoens-windows.msi
+          copy '*.AppImage'   gedoens-linux.AppImage
+          copy '*.deb'        gedoens-linux.deb
+          copy '*.rpm'        gedoens-linux.rpm
+          gh release upload "$TAG" -R "$REPO" --clobber out/*
