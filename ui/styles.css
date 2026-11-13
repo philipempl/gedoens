@@ -259,6 +259,13 @@ button.item:hover{background:var(--hover)}
 .nk .fine{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nrow .field{width:220px;flex:none;margin:0;height:32px;background:var(--bg)}
 .nrow .btn{height:32px}
+.bh .sp{flex:1}
+.hintsrc{margin:-2px 2px 10px}
+.sugg{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:99px;flex:none;
+  font:500 13px var(--sans);color:var(--text);background:var(--s2);transition:background-color var(--t-tint) ease}
+.sugg:hover{background:var(--sel)}
+.sugg svg{width:13px;height:13px;color:var(--ok);stroke-width:2.2}
+.nrow .field{width:180px}
 
 /* Compare: variables down, files across; equal values share a letter and a tint. */
 .segs{display:flex;padding:3px;border-radius:10px;background:var(--s2);gap:2px}

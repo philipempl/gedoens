@@ -41,11 +41,13 @@ pub struct Person {
     pub short: String,
     pub name: Option<String>,
     pub me: bool,
+    /// A name the `.sops.yaml` hints at, offered for keys that have none.
+    pub suggestion: Option<String>,
 }
 
 impl Person {
     pub fn new(recipient: &Recipient, name: Option<&str>, me: bool) -> Self {
-        Self { recipient: recipient.as_str().to_owned(), short: recipient.short(), name: name.map(str::to_owned), me }
+        Self { recipient: recipient.as_str().to_owned(), short: recipient.short(), name: name.map(str::to_owned), me, suggestion: None }
     }
 }
 

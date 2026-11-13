@@ -33,7 +33,9 @@ impl Snapshot {
 
     pub fn person(&self, recipient: &Recipient) -> Person {
         let name = self.policy.as_ref().and_then(|p| p.name_of(recipient));
-        Person::new(recipient, name, self.own.contains(recipient))
+        let mut person = Person::new(recipient, name, self.own.contains(recipient));
+        person.suggestion = self.policy.as_ref().and_then(|p| p.hint_for(recipient)).map(str::to_owned);
+        person
     }
 
     pub fn file(&self, relative: &str) -> Result<&FoundFile> {
