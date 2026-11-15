@@ -1384,7 +1384,7 @@ dependencies = [
 
 [[package]]
 name = "gedoens"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "gedoens-application",
  "gedoens-infrastructure",
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "gedoens-application"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "gedoens-domain",
  "serde",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "gedoens-domain"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "regex",
  "thiserror 2.0.21",
@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "gedoens-infrastructure"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "age",
  "gedoens-application",
